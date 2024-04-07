@@ -1,0 +1,16 @@
+https://medium.com/@bharathsudharsan023/jetson-nano-remote-vnc-access-d1e71c82492b => jetson vnc setup
+
+
+https://forums.developer.nvidia.com/t/vnc-wont-work-without-jetson-connected-to-monitor/172932/4
+
+https://github.com/overclock98/Jetson_Nano_true_Headless_setup_without_hdmi_display
+
+https://www.youtube.com/watch?v=p-m44hsEcds
+
+sudo dpkg -P --force-depends nvidia-compute-utils-550
+
+
+https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=aarch64-jetson&Compilation=Native&Distribution=Ubuntu&target_version=22.04&target_type=deb_local
+
+https://www.youtube.com/watch?v=art0-99fFa8&t=234s
+https://github.com/mdegans/nano_build_opencv
