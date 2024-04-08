@@ -1,0 +1,18 @@
+app.log
+checkgpu.py
+error.log
+joystick.log
+joystick.py
+main.py
+model
+output.log
+requirements.txt
+start.sh
+steps.txt
+test2.py
+test3.py
+test.py
+Creating session 'Terminal1Script1_1'...
+Session 'Terminal1Script1_1' created.
+Creating session 'Terminal2Script2_1'...
+Session 'Terminal2Script2_1' created.
