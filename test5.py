@@ -19,22 +19,25 @@ import logging
 import json
 
 #jetson joystick
-import py_qmc5883l
 import pygame
 import socket
 
+import logging
 
 
 import json
 import os
+import py_qmc5883l
+sensor = py_qmc5883l.QMC5883L(i2c_bus=7)
 
 compassdata = 0
 
+
 # Clear the log file
-with open('app.log', 'w'):
+with open('joystick.log', 'w'):
     pass
 # Configure logging
-logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(filename='joystick.log', level=logging.INFO)
 
 objectdetectstate = 0
 # Log messages
@@ -80,15 +83,7 @@ def joystickm():
 
     while True :
         # Loop through each joystick
-        joystickcount = pygame.joystick.get_count()
-        if(joystickcount<=0):
-            print(" restarting main.py")
-            time.sleep(1)
-            subprocess.run([sys.executable,"main.py"])
-            # Your Python code here
-            logging.info('restarting main.py',str(e))
-            sys.exit()
-        for joystick_id in range(joystickcount):
+        for joystick_id in range(pygame.joystick.get_count()):
             joystick = pygame.joystick.Joystick(joystick_id)
             joystick.init()
 
@@ -179,7 +174,11 @@ def joystickm():
 threadj = Thread(target=joystickm)
 threadj.start()
 
-
+# Clear the log file
+with open('app.log', 'w'):
+    pass
+# Configure logging
+logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logging.info('Starting main script execution...')
 
 # Log messages
@@ -208,7 +207,7 @@ def close_port_if_running(port):
     except Exception as e:
         print(f"Error closing port {port}: {e}")
 
-port_to_check = 12351  # Change this to the port you want to check
+port_to_check = 12350  # Change this to the port you want to check
 
 port_status = is_port_in_use(port_to_check)
 if port_status is None:
@@ -231,25 +230,28 @@ time.sleep(2)
 # Server IP address and port
 SERVER_IP = '0.0.0.0'  # Use 0.0.0.0 to listen on all available interfaces
 SERVER_PORT = 12351
+COMPASSSERVER_PORT = 9586
+
 # Create a socket object
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
+compassserver_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+compassserver_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+
+
 try:
 
+    compassserver_socket.bind((SERVER_IP, COMPASSSERVER_PORT))
     server_socket.bind((SERVER_IP, SERVER_PORT))
     print("Server is listening on {}:{}".format(SERVER_IP, SERVER_PORT))
     logging.info("Server is listening on {}:{}".format(SERVER_IP, SERVER_PORT))
 
+    compassserver_socket.listen(5)
     server_socket.listen(5)
 except Exception as e :
     print("already has port")
-    print(" restarting main.py")
-    time.sleep(1)
-    subprocess.run([sys.executable,"main.py"])
-    # Your Python code here
-    logging.info('already has port restarting main.py',str(e))
-    sys.exit()
 # Send the size of the serialized frame
 
 
@@ -360,16 +362,7 @@ time.sleep(1)
 
 
 
-while not videostream.stream.isOpened():
-    print("waiting for camera")
-    logging.info('waiting for camera')
-    videostream.stop()
-    print(" restarting main.py")
-    time.sleep(1)
-    logging.info('restarting main.py camera issue')
 
-    subprocess.run([sys.executable,"main.py"])
-    sys.exit()
 
 # Define the IP addresses and ports for each Stream
 Stream_1_IP = "192.168.0.7"
@@ -390,8 +383,30 @@ def send_udp_packet(socket, data, ip, port):
         socket.sendto(data.encode(), (ip, port))
     except Exception as e:
         print(f"Error sending UDP packet: {e}")
-      
 
+
+
+# def readcompass():
+#     global sensor,compassdata
+#     sensor.declination = 10
+#     while True:
+#         compassdata = sensor.get_bearing()
+#         # m = sensor.get_magnet()
+#         data = "${},{},{}".format(1, compassdata, 0)
+#         print(data)
+
+#         #Send the UDP packet to the appropriate destination based on the Stream ID
+
+        
+#         send_udp_packet(Stream1_socket, data, Stream_1_IP, Stream_1_PORT)
+#         print('Stream', Stream1_socket, data, Stream_1_IP, Stream_1_PORT)
+
+#         send_udp_packet(Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
+#         print('Stream', Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
+#         print(compassdata)
+
+# threadc = Thread(target=readcompass)
+# threadc.start()
 
 
 def map_input_to_movement(value):
@@ -417,61 +432,29 @@ max_line_counter = 10
 tracking_active = False
 cotracker = None
 
-
-try:
-    logging.info('waiting for connection')
-    conn, addr = server_socket.accept()
-
-except Exception as e:
-    print(" restarting main.py")
-    time.sleep(1)
-    logging.info('restarting main.py socket issue',e)
-
-    subprocess.run([sys.executable,"main.py"])
-    sys.exit()
-
-
 while True:
-
     t1 = cv2.getTickCount()
     frame1 = videostream.read()
-    if(not frame1):
-        print(" restarting main.py")
-        time.sleep(1)
-        logging.info('restarting main.py socket issue',e)
-        subprocess.run([sys.executable,"main.py"])
-        sys.exit()
-
     frame = frame1.copy()
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     frame_resized = cv2.resize(frame_rgb, (width, height))
     input_data = np.expand_dims(frame_resized, axis=0)
-    try:
-        sensor = py_qmc5883l.QMC5883L(i2c_bus=7)
 
-        sensor.declination = 10
-        compassdata = sensor.get_bearing()
-        # m = sensor.get_magnet()
-        data = "${},{},{}".format(2, compassdata, 0)
-        print(data)
+    sensor.declination = 10
+    compassdata = sensor.get_bearing()
+    # m = sensor.get_magnet()
+    data = "${},{},{}".format(2, compassdata, 0)
+    print(data)
 
-        #Send the UDP packet to the appropriate destination based on the Stream ID
+    #Send the UDP packet to the appropriate destination based on the Stream ID
 
-        
-        send_udp_packet(Stream1_socket, data, Stream_1_IP, Stream_1_PORT)
-        print('Stream', Stream1_socket, data, Stream_1_IP, Stream_1_PORT)
+    
+    send_udp_packet(Stream1_socket, data, Stream_1_IP, Stream_1_PORT)
+    print('Stream', Stream1_socket, data, Stream_1_IP, Stream_1_PORT)
 
-        send_udp_packet(Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
-        print('Stream', Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
-        print(compassdata)
-    except Exception as e:
-        print("compass error")
-        print(" restarting main.py")
-        time.sleep(1)
-        subprocess.run([sys.executable,"main.py"])
-        # Your Python code here
-        logging.info(f"compass error: {e}")
-        sys.exit()
+    send_udp_packet(Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
+    print('Stream', Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
+    print(compassdata)
 
     if floating_model:
         input_data = (np.float32(input_data) - input_mean) / input_std
@@ -493,7 +476,7 @@ while True:
             xmax1 = int(min(imW, (boxes[i][3] * imW)))
             bbox = (xmin1, ymin1, xmax1 - xmin1, ymax1 - ymin1)
             cv2.rectangle(frame, (xmin1,ymin1), (xmax1,ymax1), (10, 255, 0), 2)
-
+    
             # Draw label
             object_name = labels[int(classes[i])] # Look up object name from "labels" array using class index
             label = '%s: %d%%' % (object_name, int(scores[i]*100)) # Example: 'person: 72%'
@@ -589,33 +572,8 @@ while True:
       
     cv2.putText(frame, 'FPS: {0:.2f}'.format(cv2.getTickFrequency() / (cv2.getTickCount() - t1)),
                 (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2, cv2.LINE_AA)
-    
-    frame0 = cv2.resize(frame.copy(), (900, 800))  # Adjust resolution as needed
 
-    # Compress the frame
-    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 50]
-    _, img_encoded = cv2.imencode('.jpg', frame0, encode_param)
-    data = pickle.dumps(img_encoded)
-
-    # Pack the serialized frame and its size
-    message_size = struct.pack("L", len(data))
-
-    # Send the size of the serialized frame
-    try:
-        conn.sendall(message_size)
-
-        # Send the serialized frame
-        conn.sendall(data)
-    except Exception as e:
-        print("send  feed error")
-        print(" restarting main.py")
-        time.sleep(1)
-        subprocess.run([sys.executable,"main.py"])
-        # Your Python code here
-        logging.info(f"send feed error: {e}")
-        sys.exit()
-
-    # cv2.imshow('Object detector', frame)
+    cv2.imshow('Object detector', frame)
 
     if cv2.waitKey(1) == ord('q'):
         break

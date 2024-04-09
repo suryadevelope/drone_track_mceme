@@ -35,5 +35,5 @@ run_in_tmux "Terminal1Script1_1" ".venv" "main.py"
 
 # Run second Python script in terminal 2
 # Appending timestamp to session name to ensure uniqueness
-run_in_tmux "Terminal2Script2_1" ".venv" "joystick.py"
+# run_in_tmux "Terminal2Script2_1" ".venv" "joystick.py"
 

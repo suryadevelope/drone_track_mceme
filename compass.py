@@ -32,7 +32,7 @@
 
 import py_qmc5883l
 sensor = py_qmc5883l.QMC5883L(i2c_bus=7)
-sensor.declination = 35
+sensor.declination = 10
 while True:
     m = sensor.get_bearing()
     # m = sensor.get_magnet()
