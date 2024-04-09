@@ -1,0 +1,10 @@
+2024-04-10 02:03:01,416 - INFO - Starting joystick script execution...
+2024-04-10 02:03:01,710 - INFO - Starting main script execution...
+2024-04-10 02:03:01,802 - INFO - Port 12351 is not in use.
+2024-04-10 02:03:03,805 - INFO - Server is listening on 0.0.0.0:12351
+2024-04-10 02:03:05,820 - DEBUG - Falling back to TensorFlow client; we recommended you install the Cloud TPU client directly with pip install cloud-tpu-client.
+2024-04-10 02:03:06,244 - DEBUG - Creating converter from 7 to 5
+2024-04-10 02:03:06,244 - DEBUG - Creating converter from 5 to 7
+2024-04-10 02:03:06,245 - DEBUG - Creating converter from 7 to 5
+2024-04-10 02:03:06,245 - DEBUG - Creating converter from 5 to 7
+2024-04-10 02:03:08,894 - INFO - waiting for connection

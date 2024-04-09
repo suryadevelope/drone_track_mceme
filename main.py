@@ -27,8 +27,67 @@ import socket
 
 import json
 import os
+#any socket stream
+import socket
+import asyncio
+
+sensor = py_qmc5883l.QMC5883L(i2c_bus=7)
+sensor.declination = 10
 
 compassdata = 0
+slavecompassdata = 0
+
+
+UDP_IP = "255.255.255.255"  # Broadcast address
+UDP_PORT = 5005
+BUFFER_SIZE = 1024
+
+async def send_receive():
+    global slavecompassdata
+    sender_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sender_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    
+    receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    receiver_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    receiver_socket.bind((UDP_IP, UDP_PORT))
+
+    print("Sender and Receiver started...")
+
+    while True:
+        # Sending random number
+        random_number = "LMG2 "+str(sensor.get_bearing())
+        sender_socket.sendto(random_number.encode(), (UDP_IP, UDP_PORT))
+        
+        # Receiving data
+        data, addr = receiver_socket.recvfrom(BUFFER_SIZE)
+        decoded_message = data.decode()
+        if decoded_message.startswith("LMG"):
+            parts = decoded_message.split(" ")
+            if len(parts) >= 2:
+                try:
+                    first_number = int(parts[0].replace("LMG",""))
+                    second_number = float(parts[1])
+                    if(first_number==1):
+                        # print("First Number:", first_number)
+                        # print("Second Number:", second_number)
+                        slavecompassdata = second_number
+                except ValueError:
+                    print("Invalid numbers received")
+            else:
+                print("Invalid message format")
+        
+        await asyncio.sleep(0.1)  # Adjust this for your desired rate
+
+async def main():
+    await send_receive()
+
+
+def run_asyncio_main():
+    asyncio.run(main())
+
+asyncio_thread = Thread(target=run_asyncio_main)
+asyncio_thread.start()
+
 
 # Clear the log file
 with open('app.log', 'w'):
@@ -136,7 +195,7 @@ def joystickm():
                 direction = "117"
 
             # Construct the UDP packet data and send it
-            data = "@{},{},{}".format(speed, direction, trigger)
+            data = "@{},{},{},{},{}".format(speed, direction, trigger,compassdata,slavecompassdata)
 
 
             if(direction == "117"):
@@ -161,7 +220,7 @@ def joystickm():
                 direction = "117"
 
             # Construct the UDP packet data and send it
-            data = "@{},{},{}".format(speed, direction, trigger)
+            data = "@{},{},{},{},{}".format(speed, direction, trigger,compassdata,slavecompassdata)
             
             # print("2",data,objectdetectstate,objectdetectstate == 0)
         
@@ -248,7 +307,7 @@ except Exception as e :
     time.sleep(1)
     subprocess.run([sys.executable,"main.py"])
     # Your Python code here
-    logging.info('already has port restarting main.py',str(e))
+    logging.info('already has port restarting main.py')
     sys.exit()
 # Send the size of the serialized frame
 
@@ -359,7 +418,6 @@ videostream = VideoStream(resolution=(imW, imH), framerate=30).start()
 time.sleep(1)
 
 
-
 while not videostream.stream.isOpened():
     print("waiting for camera")
     logging.info('waiting for camera')
@@ -434,44 +492,23 @@ except Exception as e:
 while True:
 
     t1 = cv2.getTickCount()
-    frame1 = videostream.read()
-    if(not frame1):
+    while not videostream.stream.isOpened():
+        print("waiting for camera")
+        logging.info('waiting for camera')
+        videostream.stop()
         print(" restarting main.py")
         time.sleep(1)
-        logging.info('restarting main.py socket issue',e)
+        logging.info('restarting main.py camera issue')
+
         subprocess.run([sys.executable,"main.py"])
         sys.exit()
+    frame1 = videostream.read()
 
     frame = frame1.copy()
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     frame_resized = cv2.resize(frame_rgb, (width, height))
     input_data = np.expand_dims(frame_resized, axis=0)
-    try:
-        sensor = py_qmc5883l.QMC5883L(i2c_bus=7)
-
-        sensor.declination = 10
-        compassdata = sensor.get_bearing()
-        # m = sensor.get_magnet()
-        data = "${},{},{}".format(2, compassdata, 0)
-        print(data)
-
-        #Send the UDP packet to the appropriate destination based on the Stream ID
-
-        
-        send_udp_packet(Stream1_socket, data, Stream_1_IP, Stream_1_PORT)
-        print('Stream', Stream1_socket, data, Stream_1_IP, Stream_1_PORT)
-
-        send_udp_packet(Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
-        print('Stream', Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
-        print(compassdata)
-    except Exception as e:
-        print("compass error")
-        print(" restarting main.py")
-        time.sleep(1)
-        subprocess.run([sys.executable,"main.py"])
-        # Your Python code here
-        logging.info(f"compass error: {e}")
-        sys.exit()
+   
 
     if floating_model:
         input_data = (np.float32(input_data) - input_mean) / input_std
@@ -556,14 +593,14 @@ while True:
             
 
             # Construct the UDP packet data and send it
-            data = "@{},{},{}".format(speed, direction, trigger)
+            data = "@{},{},{},{},{}".format(speed, direction, trigger,compassdata,slavecompassdata)
             print(data)
 
             #Send the UDP packet to the appropriate destination based on the Stream ID
 
             
             send_udp_packet(Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
-            print('Stream', i, Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
+            # print('Stream', i, Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
 
             if x > 0:
                 speed = abs(x)
@@ -577,11 +614,11 @@ while True:
 
 
             # Construct the UDP packet data and send it
-            data = "@{},{},{}".format(speed, direction, trigger)
+            data = "@{},{},{},{},{}".format(speed, direction, trigger,compassdata,slavecompassdata)
 
             #Send the UDP packet to the appropriate destination based on the Stream ID
             send_udp_packet(Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
-            print('Stream', i, Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
+            # print('Stream', i, Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
         else:
             objectdetectstate = 0
             
@@ -606,6 +643,7 @@ while True:
 
         # Send the serialized frame
         conn.sendall(data)
+        # print("send data")
     except Exception as e:
         print("send  feed error")
         print(" restarting main.py")
@@ -615,7 +653,8 @@ while True:
         logging.info(f"send feed error: {e}")
         sys.exit()
 
-    # cv2.imshow('Object detector', frame)
+    
+    cv2.imshow('Object detector', frame)
 
     if cv2.waitKey(1) == ord('q'):
         break

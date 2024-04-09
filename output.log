@@ -1,18 +1,20 @@
 app.log
 checkgpu.py
+compass.py
 error.log
-joystick.log
 joystick.py
 main.py
 model
+opencvcuda.sh
 output.log
+py-qmc5883l
 requirements.txt
 start.sh
 steps.txt
 test2.py
 test3.py
+test4.py
+test5.py
 test.py
 Creating session 'Terminal1Script1_1'...
 Session 'Terminal1Script1_1' created.
-Creating session 'Terminal2Script2_1'...
-Session 'Terminal2Script2_1' created.
