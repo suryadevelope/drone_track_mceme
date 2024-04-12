@@ -3,14 +3,17 @@ checkgpu.py
 compass.py
 error.log
 joystick.py
+logs
 main.py
 model
+networktest.py
 opencvcuda.sh
 output.log
 py-qmc5883l
 requirements.txt
 start.sh
 steps.txt
+streamvideo.py
 test2.py
 test3.py
 test4.py

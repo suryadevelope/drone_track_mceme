@@ -1,4 +1,3 @@
-
 import os
 import argparse
 import cv2
@@ -19,25 +18,85 @@ import logging
 import json
 
 #jetson joystick
+import py_qmc5883l
 import pygame
-import socket
-
-import logging
-
 
 import json
 import os
-import py_qmc5883l
-sensor = py_qmc5883l.QMC5883L(i2c_bus=7)
+import asyncio
 
 compassdata = 0
+slavecompassdata = 0
+
+
+
+
+try:
+    sensor = py_qmc5883l.QMC5883L(i2c_bus=7)
+except Exception as e:
+    print(" compass issue restarting main.py")
+    print(e)
+    time.sleep(1)
+    subprocess.run([sys.executable,"main.py"])
+    # Your Python code here
+    logging.info('compass read issue  restarting main.py',str(e))
+    sys.exit()
+
+sensor.declination = 10
+
+UDP_IP = "255.255.255.255"  # Broadcast address
+UDP_PORT = 5005
+BUFFER_SIZE = 1024
+
+async def send_receive():
+    global slavecompassdata
+    sender_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sender_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    
+    receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    receiver_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    receiver_socket.bind((UDP_IP, UDP_PORT))
+
+    print("Sender and Receiver started...")
+
+    while True:
+        # Sending random number
+        random_number = "LMG2 "+str(sensor.get_bearing())
+        sender_socket.sendto(random_number.encode(), (UDP_IP, UDP_PORT))
+        
+        # Receiving data
+        data, addr = receiver_socket.recvfrom(BUFFER_SIZE)
+        decoded_message = data.decode()
+        if decoded_message.startswith("LMG"):
+            parts = decoded_message.split(" ")
+            # print(parts)
+            if len(parts) >= 2:
+                try:
+                    first_number = int(parts[0].replace("LMG",""))
+                    second_number = float(parts[1])
+                    if(first_number == 2):
+                        slavecompassdata = second_number
+                except ValueError:
+                    print("Invalid numbers received")
+            else:
+                print("Invalid message format")
+        await asyncio.sleep(0.1)  # Adjust this for your desired rate
+
+async def main():
+    await send_receive()
+
+def run_asyncio_main():
+    asyncio.run(main())
+
+asyncio_thread = Thread(target=run_asyncio_main)
+asyncio_thread.start()
 
 
 # Clear the log file
-with open('joystick.log', 'w'):
+with open('app.log', 'w'):
     pass
 # Configure logging
-logging.basicConfig(filename='joystick.log', level=logging.INFO)
+logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 objectdetectstate = 0
 # Log messages
@@ -47,7 +106,7 @@ def joystickm():
     # Define the IP addresses and ports for each Stream
     # Stream_1_IP = "192.168.0.7"
     # Stream_1_PORT = 20108
-    Stream_2_IP = "192.168.0.9"
+    Stream_2_IP = "192.168.0.7"
     Stream_2_PORT = 20108
 
 
@@ -83,7 +142,15 @@ def joystickm():
 
     while True :
         # Loop through each joystick
-        for joystick_id in range(pygame.joystick.get_count()):
+        joystickcount = pygame.joystick.get_count()
+        if(joystickcount<=0):
+            print(" no joystick restarting main.py")
+            time.sleep(1)
+            subprocess.run([sys.executable,"main.py"])
+            # Your Python code here
+            logging.info('restarting main.py',str(e))
+            sys.exit()
+        for joystick_id in range(joystickcount):
             joystick = pygame.joystick.Joystick(joystick_id)
             joystick.init()
 
@@ -126,12 +193,12 @@ def joystickm():
                 speed = 0
                 direction = "117"
 
-            if(speed<=20):
+            if(speed<=25):
                 speed=0
                 direction = "117"
 
             # Construct the UDP packet data and send it
-            data = "@{},{},{}".format(speed, direction, trigger)
+            data = "@{},{},{}.{},{}".format(speed, direction, trigger,compassdata,slavecompassdata)
 
 
             if(direction == "117"):
@@ -151,12 +218,13 @@ def joystickm():
                 speed = 0
                 direction = "117"
             
-            if(speed<=20):
+            if(speed<=25):
                 speed=0
                 direction = "117"
 
             # Construct the UDP packet data and send it
-            data = "@{},{},{}".format(speed, direction, trigger)
+            data = "@{},{},{}.{},{}".format(speed, direction, trigger,compassdata,slavecompassdata)
+
             
             # print("2",data,objectdetectstate,objectdetectstate == 0)
         
@@ -174,11 +242,7 @@ def joystickm():
 threadj = Thread(target=joystickm)
 threadj.start()
 
-# Clear the log file
-with open('app.log', 'w'):
-    pass
-# Configure logging
-logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
 logging.info('Starting main script execution...')
 
 # Log messages
@@ -229,29 +293,26 @@ time.sleep(2)
 
 # Server IP address and port
 SERVER_IP = '0.0.0.0'  # Use 0.0.0.0 to listen on all available interfaces
-SERVER_PORT = 12351
-COMPASSSERVER_PORT = 9586
-
+SERVER_PORT = 12350
 # Create a socket object
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-compassserver_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-compassserver_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-
-
 try:
 
-    compassserver_socket.bind((SERVER_IP, COMPASSSERVER_PORT))
     server_socket.bind((SERVER_IP, SERVER_PORT))
     print("Server is listening on {}:{}".format(SERVER_IP, SERVER_PORT))
     logging.info("Server is listening on {}:{}".format(SERVER_IP, SERVER_PORT))
 
-    compassserver_socket.listen(5)
     server_socket.listen(5)
 except Exception as e :
     print("already has port")
+    print(" restarting main.py")
+    time.sleep(1)
+    subprocess.run([sys.executable,"main.py"])
+    # Your Python code here
+    logging.info('already has port restarting main.py',str(e))
+    sys.exit()
 # Send the size of the serialized frame
 
 
@@ -259,8 +320,8 @@ except Exception as e :
 class VideoStream:
     """Camera object that controls video streaming from the webcam"""
     def __init__(self, resolution=(640,480), framerate=30):
-        self.stream = cv2.VideoCapture(0)
-        # self.stream = cv2.VideoCapture("rtsp://admin:Admin123@192.168.0.65:554/preview.asp")
+        # self.stream = cv2.VideoCapture(0)
+        self.stream = cv2.VideoCapture("rtsp://admin:Admin123@192.168.0.65:554/preview.asp")
         ret = self.stream.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         ret = self.stream.set(3, resolution[0])
         ret = self.stream.set(4, resolution[1])
@@ -362,13 +423,17 @@ time.sleep(1)
 
 
 
-
+while not videostream.stream.isOpened():
+    print("waiting for camera")
+    logging.info('waiting for camera')
+    videostream.stop()
+    time.sleep(1)
 
 # Define the IP addresses and ports for each Stream
-Stream_1_IP = "192.168.0.7"
+Stream_1_IP = "192.168.0.9"
 Stream_1_PORT = 20108
 
-Stream_2_IP = "192.168.0.9"
+Stream_2_IP = "192.168.0.7"
 Stream_2_PORT = 20108
 
 
@@ -383,30 +448,8 @@ def send_udp_packet(socket, data, ip, port):
         socket.sendto(data.encode(), (ip, port))
     except Exception as e:
         print(f"Error sending UDP packet: {e}")
+      
 
-
-
-# def readcompass():
-#     global sensor,compassdata
-#     sensor.declination = 10
-#     while True:
-#         compassdata = sensor.get_bearing()
-#         # m = sensor.get_magnet()
-#         data = "${},{},{}".format(1, compassdata, 0)
-#         print(data)
-
-#         #Send the UDP packet to the appropriate destination based on the Stream ID
-
-        
-#         send_udp_packet(Stream1_socket, data, Stream_1_IP, Stream_1_PORT)
-#         print('Stream', Stream1_socket, data, Stream_1_IP, Stream_1_PORT)
-
-#         send_udp_packet(Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
-#         print('Stream', Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
-#         print(compassdata)
-
-# threadc = Thread(target=readcompass)
-# threadc.start()
 
 
 def map_input_to_movement(value):
@@ -432,29 +475,39 @@ max_line_counter = 10
 tracking_active = False
 cotracker = None
 
+
+try:
+    logging.info('waiting for connection')
+    conn, addr = server_socket.accept()
+
+except Exception as e:
+    print(" socket restarting main.py")
+    time.sleep(1)
+    logging.info('restarting main.py socket issue',e)
+
+    subprocess.run([sys.executable,"main.py"])
+    sys.exit()
+logging.info('got a connection')
+
+
 while True:
+
     t1 = cv2.getTickCount()
+
     frame1 = videostream.read()
-    frame = frame1.copy()
+    try:
+        frame = frame1.copy()
+    except Exception as e:
+        print(" no frame restarting main.py")
+        time.sleep(1)
+        logging.info('restarting main.py socket issue',e)
+        subprocess.run([sys.executable,"main.py"])
+        sys.exit()
+
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     frame_resized = cv2.resize(frame_rgb, (width, height))
     input_data = np.expand_dims(frame_resized, axis=0)
-
-    sensor.declination = 10
-    compassdata = sensor.get_bearing()
-    # m = sensor.get_magnet()
-    data = "${},{},{}".format(2, compassdata, 0)
-    print(data)
-
-    #Send the UDP packet to the appropriate destination based on the Stream ID
-
-    
-    send_udp_packet(Stream1_socket, data, Stream_1_IP, Stream_1_PORT)
-    print('Stream', Stream1_socket, data, Stream_1_IP, Stream_1_PORT)
-
-    send_udp_packet(Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
-    print('Stream', Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
-    print(compassdata)
+  
 
     if floating_model:
         input_data = (np.float32(input_data) - input_mean) / input_std
@@ -476,7 +529,7 @@ while True:
             xmax1 = int(min(imW, (boxes[i][3] * imW)))
             bbox = (xmin1, ymin1, xmax1 - xmin1, ymax1 - ymin1)
             cv2.rectangle(frame, (xmin1,ymin1), (xmax1,ymax1), (10, 255, 0), 2)
-    
+
             # Draw label
             object_name = labels[int(classes[i])] # Look up object name from "labels" array using class index
             label = '%s: %d%%' % (object_name, int(scores[i]*100)) # Example: 'person: 72%'
@@ -539,7 +592,8 @@ while True:
             
 
             # Construct the UDP packet data and send it
-            data = "@{},{},{}".format(speed, direction, trigger)
+            data = "@{},{},{}.{},{}".format(speed, direction, trigger,compassdata,slavecompassdata)
+
             print(data)
 
             #Send the UDP packet to the appropriate destination based on the Stream ID
@@ -560,7 +614,8 @@ while True:
 
 
             # Construct the UDP packet data and send it
-            data = "@{},{},{}".format(speed, direction, trigger)
+            data = "@{},{},{}.{},{}".format(speed, direction, trigger,compassdata,slavecompassdata)
+
 
             #Send the UDP packet to the appropriate destination based on the Stream ID
             send_udp_packet(Stream2_socket, data, Stream_2_IP, Stream_2_PORT)
@@ -572,8 +627,33 @@ while True:
       
     cv2.putText(frame, 'FPS: {0:.2f}'.format(cv2.getTickFrequency() / (cv2.getTickCount() - t1)),
                 (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2, cv2.LINE_AA)
+    
+    frame0 = cv2.resize(frame.copy(), (900, 800))  # Adjust resolution as needed
 
-    cv2.imshow('Object detector', frame)
+    # Compress the frame
+    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 50]
+    _, img_encoded = cv2.imencode('.jpg', frame0, encode_param)
+    data = pickle.dumps(img_encoded)
+
+    # Pack the serialized frame and its size
+    message_size = struct.pack("L", len(data))
+
+    # Send the size of the serialized frame
+    try:
+        conn.sendall(message_size)
+
+        # Send the serialized frame
+        conn.sendall(data)
+    except Exception as e:
+        print("send  feed error")
+        print(" send  feed error restarting main.py")
+        time.sleep(1)
+        logging.info('restarting main.py socket issue',e)
+        subprocess.run([sys.executable,"main.py"])
+        sys.exit()
+        
+
+    # cv2.imshow('Object detector', frame)
 
     if cv2.waitKey(1) == ord('q'):
         break
